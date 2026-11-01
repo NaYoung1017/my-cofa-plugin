@@ -246,6 +246,8 @@ def cross_check(tables):
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):  # 한글 출력이 콘솔 인코딩(cp949 등) 때문에 깨지거나 죽지 않게
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="데이터 첫 점검 (표준 라이브러리)")
     ap.add_argument("files", nargs="+")
     ap.add_argument("--top", type=int, default=5)

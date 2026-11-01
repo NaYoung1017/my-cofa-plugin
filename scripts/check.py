@@ -273,6 +273,8 @@ def check_git(root):
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):  # 한글 출력이 콘솔 인코딩(cp949 등) 때문에 깨지거나 죽지 않게
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = sys.argv[1:]
     if args and args[0] == "--snapshot":
         snapshot(args[1] if len(args) > 1 else ".")
