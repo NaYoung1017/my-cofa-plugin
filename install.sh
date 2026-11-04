@@ -8,7 +8,11 @@ set -euo pipefail
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST="$(cd "${1:-.}" && pwd)"
 MARK="<!-- my-cofa-plugin:begin -->"
-PY="$(command -v python3 || command -v python || true)"
+# 실제로 실행되는 python만 쓴다 (Windows의 MS Store 가짜 python처럼 있기만 하고 실패하는 것은 건너뛴다)
+PY=""
+for c in python3 python; do
+  if command -v "$c" >/dev/null 2>&1 && "$c" -c "import sys" >/dev/null 2>&1; then PY="$(command -v "$c")"; break; fi
+done
 
 if [ "$KIT" = "$DEST" ]; then
   echo "키트 폴더 자체에는 설치하지 않습니다. 과제 작업 폴더에서 실행하세요." >&2
@@ -37,10 +41,10 @@ for d in "$KIT"/.agents/skills/cofa-*; do
 done
 echo "- 스킬 $(ls -d "$KIT"/.agents/skills/cofa-* | wc -l | tr -d ' ')개 → .agents/skills/"
 
-# 2) 서브에이전트 정의 (프로젝트 범위, cofa-data / cofa-builder 두 개뿐)
+# 2) 서브에이전트 정의 (프로젝트 범위: cofa-builder / cofa-reviewer / cofa-writer / cofa-data)
 mkdir -p "$DEST/.codex/agents"
 cp "$KIT"/.codex/agents/cofa-*.toml "$DEST/.codex/agents/"
-echo "- 서브에이전트 정의 2개 → .codex/agents/"
+echo "- 서브에이전트 정의 $(ls "$KIT"/.codex/agents/cofa-*.toml | wc -l | tr -d ' ')개 → .codex/agents/"
 
 # 3) 규칙 — 과제의 AGENTS.md는 고치지 않는다
 cp "$KIT/AGENTS.md" "$DEST/.cofa/RULES.md"
@@ -77,7 +81,7 @@ else
 fi
 
 # 4) 기록 양식: 없는 파일만 만든다
-mkdir -p "$DEST/cofa-notes/data"
+mkdir -p "$DEST/cofa-notes/data" "$DEST/cofa-notes/reviews"
 for t in "$KIT"/templates/*.md; do
   f="$DEST/cofa-notes/$(basename "$t")"
   [ -f "$f" ] || cp "$t" "$f"

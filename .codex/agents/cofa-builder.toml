@@ -1,6 +1,9 @@
 # my-cofa-plugin 서브에이전트: cofa-builder — 작업 카드 하나 구현
-# model을 적지 않았다: 메인 세션의 모델을 그대로 쓴다.
+# 모델: 코드 정확도가 중요해 6.1 Sol. 카드가 범위를 좁혀 주므로 effort는 medium.
+# 생성이 모델 오류로 실패하면 아래 두 줄을 지우고 메인 세션 모델을 쓴다.
 name = "cofa-builder"
+model = "gpt-6.1-sol"
+model_reasoning_effort = "medium"
 description = "사용자가 승인한 작업 카드(T-n) 하나를 카드에 적힌 파일 안에서만 구현하고 완료 확인 명령을 실행해 실제 출력을 보고한다. 설계 결정을 하지 않고, 다른 에이전트를 만들지 않는다."
 developer_instructions = """
 <역할>

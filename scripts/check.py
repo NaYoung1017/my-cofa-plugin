@@ -40,10 +40,15 @@ def read(path):
         return None
 
 
-def walk_files(root):
+def walk_files(root, env_files=False):
+    """숨김 폴더·파일(.config, .cache, .bash_history 등)은 건너뛴다.
+    작업 폴더가 홈(~)인 환경에서 IDE·셸이 바꾸는 파일을 원본 변경으로 잡지 않기 위해서다.
+    env_files=True(비밀키 스캔)면 숨김 파일 중 .env 계열만 포함한다."""
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
         for fn in filenames:
+            if fn.startswith(".") and not (env_files and fn.startswith(".env")):
+                continue
             yield os.path.join(dirpath, fn)
 
 
@@ -160,7 +165,7 @@ def check_notes(root):
             add("FAIL", "문제 정의", "사용자가 쓴 문장이 비어 있음")
         unresolved(table_rows(brief, "U"), "모르는 것")
         unresolved(table_rows(brief, "I"), "데이터 이슈")
-        reqs = table_rows(brief, "R")
+        reqs = [r for r in table_rows(brief, "R") if len(r) >= 2 and r[1]]  # 요구 칸이 빈 양식 행 제외
         if not reqs:
             add("FAIL", "요구사항", "R-n 행 0개")
         else:
@@ -231,7 +236,7 @@ def check_notes(root):
 
 def check_secrets(root):
     scanned, hits = 0, []
-    for p in walk_files(root):
+    for p in walk_files(root, env_files=True):
         try:
             if os.path.getsize(p) > 1_000_000:
                 continue

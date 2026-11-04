@@ -51,7 +51,7 @@ cofa-start → cofa-interview ⇄ cofa-align → cofa-plan → [cofa-build 반�
 | `$cofa-align` | 인터뷰 후, 새 답, 중간 점검 | 방향 승인 / 범위 조정 선택 | `BRIEF.md` v1… |
 | `$cofa-plan` | 코드 쓰기 전 | 방식 A/B/C 중 고르기, 계획 승인 | `PLAN.md` |
 | `$cofa-build` | 작업 하나마다 | 브리핑 보고 OK | 커밋, `EXPLAIN.md` 동작 지도 |
-| `$cofa-delegate` | 큰 작업을 나눌 때 | 서브에이전트 생성 승인 | `SUBAGENTS.md` |
+| `$cofa-delegate` | 큰 작업을 나눌 때, 검수·명세 갱신·제출 문서를 맡길 때 | 서브에이전트 생성 승인, 수정 방법 고르기 | `SUBAGENTS.md`, `cofa-notes/reviews/` |
 | `$cofa-verify` | 제출 전 | 화면 직접 확인 | `VERIFY.md` |
 | `$cofa-decide` | 결정마다 (다른 스킬이 호출) | 기록 확인 | `DECISIONS.md` |
 | `$cofa-explain` | 제출 직전 | 막힌 부분 내 말로 다시 쓰기 | `EXPLAIN.md`, 제출 문서 보정 |
@@ -69,14 +69,25 @@ cofa-start → cofa-interview ⇄ cofa-align → cofa-plan → [cofa-build 반�
 
 ## 서브에이전트
 
-메인 세션이 총괄이다. 서브에이전트는 두 역할만 있고, `$cofa-delegate` 점검을 통과하고 사용자가 OK할 때만 만든다.
+메인 세션이 총괄이다(사용자와 대화, 결정 받기, 결과 재확인). 서브에이전트는 네 역할만 있고, `$cofa-delegate` 점검을 통과하고 사용자가 OK할 때만 만든다.
 
-| 역할 | 하는 일 |
-|---|---|
-| `cofa-data` | 데이터 요약·불일치 찾기 (읽기 전용, 처리 방법은 선택지로만) |
-| `cofa-builder` | 승인된 작업 카드 하나를 카드의 파일 안에서 구현 |
+| 역할 | 하는 일 | 쓸 수 있는 파일 | 모델 / effort |
+|---|---|---|---|
+| `cofa-builder` | 승인된 작업 카드 하나를 카드의 파일 안에서 구현 | 카드의 "바꿀 파일"만 | 6.1 Sol / medium |
+| `cofa-reviewer` | 구현자와 독립적으로 검수: 요구에서 기대값을 먼저 손으로 정하고 → 실행 → 대조. 재현한 문제만 보고, 고치지 않음 | `cofa-notes/reviews/`만 | 6.1 Sol / high |
+| `cofa-writer` | ① 명세 모드: 담당자 답·결정이 BRIEF·PLAN의 어디를 바꾸는지 변경안 + 정합성 점검 → 승인 항목만 반영 ② 제출 문서 모드: DECISIONS·VERIFY·실행 결과만 근거로 작성 | ① 승인 뒤 BRIEF·PLAN ② 카드의 제출 문서 | 5.6 Terra / medium |
+| `cofa-data` | 데이터 요약·불일치 찾기 (처리 방법은 선택지로만) | `cofa-notes/data/`만 | 5.6 Terra / medium |
 
-상한: 동시 2개(역할별 1개), 세션 6회. 서브에이전트는 다른 에이전트를 만들지 않고 결정하지 않는다. 결과는 메인이 다시 실행해 확인한다.
+메인은 `/model`에서 6.1 Sol medium 권장(방식 비교·어려운 디버깅만 high). 서브에이전트 생성이 모델 오류로 실패하면 그 `.toml`의 `model` 두 줄을 지우고 메인 모델을 쓴다.
+
+```
+builder(또는 메인)가 T-n 구현 → 메인 재실행 → reviewer가 T-n 독립 검수 (그동안 builder는 파일이 안 겹치는 T-n+1)
+   → FAIL은 메인이 재현 → 사용자가 수정 방법 선택 → [수정] 결정 기록
+구현 중 담당자 답 → 메인이 기록 → writer 명세 변경안 → 사용자가 번호별 승인 → writer 반영 → 메인이 diff·현황 확인 → 카드 갱신
+검증 뒤 writer가 제출 문서 초안 → 메인이 근거 대조 → 사용자가 전부 직접 읽기 → $cofa-explain
+```
+
+상한: 동시 3개(역할별 1개). 역할당 1개를 만들어 후속 지시로 재사용하고, 교체(종료됐거나 맥락이 꼬였을 때)는 역할당 1번까지. 만든 쪽이 자기 작업을 검수하지 않는다. 서브에이전트는 다른 에이전트를 만들지 않고 결정하지 않는다. 결과는 메인이 다시 실행해 확인한다. 서브에이전트 생성이 안 되는 환경이면 터미널 새 탭에서 Codex를 하나 더 열어 같은 카드를 붙여넣는다.
 
 ## 도구 (`.cofa/tools/`, Python 표준 라이브러리)
 

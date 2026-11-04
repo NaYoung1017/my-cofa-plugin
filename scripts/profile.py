@@ -18,8 +18,15 @@ from collections import Counter
 
 MISSING = {"", "na", "n/a", "nan", "null", "none", "-", "nil", "#n/a"}
 PII_NAME = re.compile(
-    r"(name|이름|성명|phone|tel|mobile|전화|휴대|연락처|e-?mail|메일|address|addr|주소|"
+    r"(phone|tel|mobile|전화|휴대|연락처|e-?mail|메일|address|addr|주소|"
     r"birth|생년|생일|주민|ssn|resident|account|계좌|card|카드|passport|여권)",
+    re.I,
+)
+# 사람 이름 열만 가린다. tool_name·product_name·step_name 같은 설비·제품 이름은 가리지 않는다.
+PERSON_NAME = re.compile(
+    r"^(name|full_?name|first_?name|last_?name|이름|성명|성함)$|"
+    r"(user|member|employee|emp|customer|cust|person|operator|worker|driver|student|patient|staff|manager|"
+    r"owner|requester|applicant|담당자|직원|고객|회원|사원|작업자|신청자|학생|환자)[_\s-]?(name|nm|명|이름|성명)$",
     re.I,
 )
 EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
@@ -112,7 +119,7 @@ def kind(v):
 
 
 def is_pii(col, values):
-    if PII_NAME.search(col):
+    if PII_NAME.search(col) or PERSON_NAME.search(col.strip()):
         return True
     sample = [v for v in values[:200] if v]
     if sample and sum(1 for v in sample if EMAIL.match(v) or PHONE.match(v)) >= len(sample) * 0.5:
@@ -184,8 +191,24 @@ def report(path, top):
     for i, c in enumerate(cols):
         vals = [r[i] if i < len(r) else "" for r in rows]
         profiles.append(profile_column(c, vals, top))
-    keys = [p["col"] for p in profiles if p["missing"] == 0 and p["unique"] == p["n"] and p["n"] > 0]
+    # 측정값(숫자) 열은 우연히 값이 모두 달라도 키가 아니다 — 이름이 키처럼 보이는 숫자 열만 남긴다
+    keys = [p["col"] for p in profiles
+            if p["missing"] == 0 and p["unique"] == p["n"] and p["n"] > 0
+            and ("num" not in p or KEYISH.search(p["col"])) and not p["pii"]]
     print(f"- 키 후보(빈 값 없고 모두 다름): {', '.join(keys) if keys else '없음'}")
+    # 키처럼 보이는 열이 여럿이면 그 조합이 겹치는 행을 센다 (재검사·장비 변경·중복 입력 확인용)
+    keyish = [i for i, p in enumerate(profiles) if KEYISH.search(p["col"])]
+    if len(keyish) >= 2:
+        combo = Counter(tuple(r[i] if i < len(r) else "" for i in keyish) for r in rows)
+        dup_keys = {k: c for k, c in combo.items() if c > 1}
+        names = ", ".join(cols[i] for i in keyish)
+        if dup_keys:
+            dup_rows = sum(dup_keys.values())
+            sample = "; ".join(f"{'/'.join(k)}×{c}" for k, c in list(dup_keys.items())[:3])
+            print(f"- ⚠ 키처럼 보이는 열 조합 ({names})이 겹치는 경우 {len(dup_keys)}개 ({dup_rows}행), 예: {sample}"
+                  f" → 재검사·변경 이력인지 중복 입력인지, 한 행이 무엇을 뜻하는지 확인 필요")
+        else:
+            print(f"- 키처럼 보이는 열 조합 ({names}): 겹침 없음")
     pii_cols = [p["col"] for p in profiles if p["pii"]]
     if pii_cols:
         print(f"- 개인정보 의심 열(값 가림): {', '.join(pii_cols)}")
@@ -203,6 +226,8 @@ def report(path, top):
                 extra.append(f"IQR 밖 {s['outliers']}")
             if s["negatives"]:
                 extra.append(f"음수 {s['negatives']}")
+            if s["zeros"]:
+                extra.append(f"0 값 {s['zeros']}")  # 분모로 쓰이는 열이면 0으로 나누기 주의
             if s["non_numeric"]:
                 extra.append(f"숫자 아님 {s['non_numeric']}")
             if extra:
@@ -266,7 +291,7 @@ def main():
     if len(tables) > 1:
         cross_check(tables)
     print("\n## 다음")
-    print("- ⚠ 표시(형식 섞임, IQR 밖, 음수), 빈 값, 중복을 BRIEF '데이터 이슈'로 옮기고 지시서의 숫자 조건과 대조한다.")
+    print("- ⚠ 표시(형식 섞임, IQR 밖, 음수, 0 값, 키 조합 겹침), 빈 값, 중복을 BRIEF '데이터 이슈'로 옮기고 지시서의 숫자 조건과 대조한다.")
     if total_rows == 0:
         print("\n⚠ 읽은 행이 0건 — 이 결과를 '문제 없음'으로 읽지 말 것 (exit 2)")
         sys.exit(2)
