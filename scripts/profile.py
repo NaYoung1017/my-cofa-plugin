@@ -142,6 +142,10 @@ def profile_column(col, values, top):
         "col": col, "n": n, "missing": missing, "unique": uniq,
         "kinds": dict(kinds), "pii": pii, "present": present,
     }
+    # 날짜·시간은 모두 같은 형식으로 분류되므로 숫자 자리를 지운 모양으로 섞임을 본다 (2026-01-03 / 2026/01/03)
+    shapes = Counter(re.sub(r"\d", "#", v) for v in present if kind(v) in ("date", "time"))
+    if len(shapes) > 1:
+        out["shapes"] = shapes
     nums = []
     # 절반 이상이 숫자면 숫자 열로 보고, 숫자가 아닌 값은 따로 센다
     if kinds and (kinds.get("int", 0) + kinds.get("float", 0)) >= len(present) * 0.5:
@@ -173,6 +177,11 @@ def profile_column(col, values, top):
     return out
 
 
+def mostly_datetime(p):
+    present = p["n"] - p["missing"]
+    return present > 0 and p["kinds"].get("date", 0) + p["kinds"].get("time", 0) >= present * 0.5
+
+
 def fmt_num(x):
     return f"{x:.4g}" if isinstance(x, float) and not x.is_integer() else f"{int(x)}" if isinstance(x, float) else str(x)
 
@@ -191,11 +200,20 @@ def report(path, top):
     for i, c in enumerate(cols):
         vals = [r[i] if i < len(r) else "" for r in rows]
         profiles.append(profile_column(c, vals, top))
-    # 측정값(숫자) 열은 우연히 값이 모두 달라도 키가 아니다 — 이름이 키처럼 보이는 숫자 열만 남긴다
+    # 측정값(숫자)·날짜·시간 열은 우연히 값이 모두 달라도 키가 아니다 — 이름이 키처럼 보이는 열만 남긴다
     keys = [p["col"] for p in profiles
             if p["missing"] == 0 and p["unique"] == p["n"] and p["n"] > 0
-            and ("num" not in p or KEYISH.search(p["col"])) and not p["pii"]]
+            and (("num" not in p and not mostly_datetime(p)) or KEYISH.search(p["col"])) and not p["pii"]]
     print(f"- 키 후보(빈 값 없고 모두 다름): {', '.join(keys) if keys else '없음'}")
+    # 키처럼 보이는 열 하나의 값이 겹치면 알린다 (다른 표와 잇는 열은 겹치는 것이 정상일 수 있어 판단은 하지 않는다)
+    for p in profiles:
+        if KEYISH.search(p["col"]) and set(p["kinds"]) != {"bool"}:
+            dup_vals = {v: c for v, c in Counter(p["present"]).items() if c > 1}
+            if dup_vals:
+                sample = "(값 가림)" if p["pii"] else "; ".join(f"{v}×{c}" for v, c in list(dup_vals.items())[:3])
+                print(f"- ⚠ 키처럼 보이는 열 {p['col']}: 값 있는 {len(p['present'])}행 중 고유값 {p['unique']}개 — "
+                      f"겹치는 값 {len(dup_vals)}개 ({sum(dup_vals.values())}행), 예: {sample}"
+                      f" → 중복 입력인지, 한 값에 여러 행이 정상인지 확인 필요")
     # 키처럼 보이는 열이 여럿이면 그 조합이 겹치는 행을 센다 (재검사·장비 변경·중복 입력 확인용)
     keyish = [i for i, p in enumerate(profiles) if KEYISH.search(p["col"])]
     if len(keyish) >= 2:
@@ -204,7 +222,10 @@ def report(path, top):
         names = ", ".join(cols[i] for i in keyish)
         if dup_keys:
             dup_rows = sum(dup_keys.values())
-            sample = "; ".join(f"{'/'.join(k)}×{c}" for k, c in list(dup_keys.items())[:3])
+            # 예시에 개인정보 열의 값이 나오지 않게 그 자리만 가린다
+            sample = "; ".join(
+                "/".join("(가림)" if profiles[i]["pii"] else v for i, v in zip(keyish, k)) + f"×{c}"
+                for k, c in list(dup_keys.items())[:3])
             print(f"- ⚠ 키처럼 보이는 열 조합 ({names})이 겹치는 경우 {len(dup_keys)}개 ({dup_rows}행), 예: {sample}"
                   f" → 재검사·변경 이력인지 중복 입력인지, 한 행이 무엇을 뜻하는지 확인 필요")
         else:
@@ -218,6 +239,8 @@ def report(path, top):
         kinds = ", ".join(f"{k} {v}" for k, v in sorted(p["kinds"].items(), key=lambda kv: -kv[1])) or "-"
         if len(p["kinds"]) > 1:
             kinds = "⚠ 섞임: " + kinds
+        if "shapes" in p:
+            kinds += " ⚠ 날짜·시간 형식 섞임: " + ", ".join(f"{s} {c}" for s, c in p["shapes"].most_common(5))
         if "num" in p:
             s = p["num"]
             rng = f"{fmt_num(s['min'])}~{fmt_num(s['max'])} (평균 {s['mean']:.4g}, 중앙 {fmt_num(float(s['median']))})"
@@ -291,7 +314,7 @@ def main():
     if len(tables) > 1:
         cross_check(tables)
     print("\n## 다음")
-    print("- ⚠ 표시(형식 섞임, IQR 밖, 음수, 0 값, 키 조합 겹침), 빈 값, 중복을 BRIEF '데이터 이슈'로 옮기고 지시서의 숫자 조건과 대조한다.")
+    print("- ⚠ 표시(형식 섞임, 날짜·시간 형식 섞임, IQR 밖, 음수, 0 값, 키 값·조합 겹침), 빈 값, 중복을 BRIEF '데이터 이슈'로 옮기고 지시서의 숫자 조건과 대조한다.")
     if total_rows == 0:
         print("\n⚠ 읽은 행이 0건 — 이 결과를 '문제 없음'으로 읽지 말 것 (exit 2)")
         sys.exit(2)

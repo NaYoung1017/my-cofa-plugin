@@ -49,7 +49,7 @@ description: 서브에이전트(cofa-builder 구현, cofa-reviewer 구현 검수
 
 ## 3. 작업 카드 (역할별로 꼭 들어갈 것)
 - builder: T-n / 연결 R-n / 바꿀 파일 / 완료 확인 명령과 기대 결과 / 금지
-- reviewer: 대상 T-n(또는 "전체") / 연결 R-n과 조건 Q-n / 확인 명령 / 데이터 위치. **구현자의 보고·설명은 넣지 않는다**(독립 검수가 목적이다). 바뀐 파일 목록은 넣는다
+- reviewer: 대상 T-n(또는 "전체") / 연결 R-n과 조건 Q-n / 확인 명령 / 데이터 위치. **구현자의 보고·설명은 넣지 않는다**(독립 검수가 목적이다). 바뀐 파일 목록과 그 T-n의 커밋 해시(커밋 전이면 `미커밋`)는 넣는다
 - writer 명세 모드: 첫 줄 `모드: 명세` / 반영할 Q-n·D-n 번호(INTERVIEW·DECISIONS 위치) / 사용자가 말한 범위·우선순위 조건 그대로
 - writer 명세 반영 모드: 첫 줄 `모드: 명세 반영` / `사용자 OK: 변경안 n, m 반영` (사용자가 고친 내용이 있으면 그대로)
 - writer 제출 문서 모드: 첫 줄 `모드: 제출 문서` / 쓸 문서 경로와 README가 정한 형식(형식 파일이 있으면 그 경로) / 근거 파일(BRIEF·DECISIONS·VERIFY·EXPLAIN) / 실행 방법 확인 명령
@@ -80,7 +80,7 @@ description: 서브에이전트(cofa-builder 구현, cofa-reviewer 구현 검수
 
 ## 6. 결과 받기 (메인이 한다)
 공통
-1. 보고를 그대로 믿지 않는다. 바뀐 파일이 카드 범위 안인지 `git diff --stat`으로 본다.
+1. 보고를 그대로 믿지 않는다. 바뀐 파일이 카드 범위 안인지 `git status --short --untracked-files=all -- . ':!.agents' ':!.codex' ':!cofa-notes'`로 본다. `git diff --stat`은 새 파일을 보여주지 않으므로 이것만으로 판단하지 않는다. 키트가 만든 `AGENTS.md`·`AGENTS.override.md`는 무시한다. git 저장소가 아니면 범위 점검은 NOT_RUN으로 적고 사용자에게 알린다.
 2. 사용자에게 요약: 무엇이 됐나 / 실제 결과 / 정할 것. 선택지가 있으면 사용자가 고른다.
 3. `SUBAGENTS.md` 상태를 `완료`로, "메인의 확인"에 다시 실행한 명령과 결과를 적는다. 결정이 생기면 `$cofa-decide`(결정자: 사용자, 근거에 "cofa-○○ 보고" 표시).
 
@@ -97,10 +97,11 @@ writer 명세 모드 (변경안을 받았을 때)
 - 변경안의 계기(Q-n·D-n)가 실제 INTERVIEW·DECISIONS 내용과 맞는지 메인이 확인한다. 답에 없는 조건이 끼어 있으면 그 항목은 빼고 알린다.
 - 사용자에게 `$cofa-align`처럼 **바뀌는 부분만** 보여준다: 번호 / `이전 → 지금 (계기)` / 영향받는 작업. 정합성 점검에서 나온 문제도 전부 함께 보여준다. 사용자가 번호별로 반영·제외·수정을 고른다.
 - 범위·우선순위가 바뀌면 `$cofa-decide`로 D-n을 남긴다(사용자 말은 "내 말"에 그대로).
+- 보내기 전에 비교 기준본을 남긴다: `mkdir -p .cofa/before && cp cofa-notes/BRIEF.md cofa-notes/PLAN.md .cofa/before/` (두 파일이 커밋 전이면 `git diff`로 비교할 수 없다).
 - 고른 번호만 `모드: 명세 반영`으로 writer에 보낸다.
 
 writer 명세 반영 모드 (반영을 마쳤을 때)
-- 메인이 `git diff -- cofa-notes/BRIEF.md cofa-notes/PLAN.md`로 **승인한 항목만** 바뀌었는지, BRIEF 버전과 변경 이력이 맞는지 본다. 승인 밖 변경이 있으면 되돌리고 알린다.
+- 메인이 `diff -u .cofa/before/BRIEF.md cofa-notes/BRIEF.md`와 `diff -u .cofa/before/PLAN.md cofa-notes/PLAN.md`로 **승인한 항목만** 바뀌었는지, BRIEF 버전과 변경 이력이 맞는지 본다. 승인 밖 변경이 있으면 되돌리고 알린다.
 - 사용자에게 작업 현황을 보고한다: PLAN 작업 상태(재작업으로 todo가 된 T-n 포함) / `SUBAGENTS.md`의 진행 중 작업 / 남은 시간.
 - 영향받는 builder·reviewer 카드를 바뀐 명세로 다시 쓴다. 진행 중인 builder 작업이 영향받으면 사용자에게 멈출지 계속할지 묻는다.
 

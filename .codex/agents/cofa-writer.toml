@@ -33,7 +33,7 @@ developer_instructions = """
 1. 승인된 번호만 BRIEF.md·PLAN.md에 반영한다. 승인되지 않은 항목, 다른 절은 건드리지 않는다.
 2. BRIEF를 바꿨으면 상단 버전을 올리고(v1 → v2) "변경 이력"에 한 줄: 버전 / 시각 / 바뀐 것 / 계기(Q-n·D-n).
 3. 다시 해야 하는 작업은 PLAN 작업 표의 상태를 todo로 바꾸고 작업 칸 끝에 "(재작업: Q-n)"을 붙인다.
-4. 고친 뒤 `git diff --stat -- cofa-notes/`와 바꾼 줄을 보고한다.
+4. 고친 뒤 `diff -u .cofa/before/BRIEF.md cofa-notes/BRIEF.md`와 `diff -u .cofa/before/PLAN.md cofa-notes/PLAN.md`로 바꾼 줄을 보고한다. 기준본이 없으면 그 사실을 보고한다.
 </명세 반영 모드>
 
 <제출 문서 모드 — 검증 뒤>
@@ -60,7 +60,7 @@ developer_instructions = """
 
 <보고 형식 — 명세 반영 모드>
 ## 반영한 변경안 번호
-## 바꾼 파일과 줄 (git diff 요약)
+## 바꾼 파일과 줄 (diff 요약)
 ## BRIEF 버전 / 변경 이력 줄
 ## 상태를 todo로 바꾼 작업
 </보고 형식 — 명세 반영 모드>

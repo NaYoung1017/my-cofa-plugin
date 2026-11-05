@@ -149,6 +149,24 @@ def unresolved(rows, label):
         add("PASS", label, f"{len(rows)}개 모두 처리됨")
 
 
+def decision_blocks(notes):
+    """결정 번호 → 내용. D1과 D-1을 같은 번호로 본다."""
+    blocks = {}
+    body = strip_comments(read(os.path.join(notes, "DECISIONS.md")) or "")
+    for block in re.split(r"^(?=## D-?\d+)", body, flags=re.M):
+        h = re.match(r"## D-?(\d+)", block)
+        if h:
+            blocks[h.group(1)] = block
+    return blocks
+
+
+def accepted_limit(verdict, decisions):
+    """FAIL(한계 D-n)이고 D-n이 사용자가 확정한 결정일 때만 한계로 인정한다."""
+    m = re.search(r"FAIL\s*\(\s*한계\s*D-?(\d+)\s*\)", verdict)
+    block = decisions.get(m.group(1)) if m else None
+    return bool(block) and "미확정" not in block and bool(re.search(r"결정자:[^\n]*사용자", block))
+
+
 def check_notes(root):
     notes = os.path.join(root, "cofa-notes")
     if not os.path.isdir(notes):
@@ -187,15 +205,22 @@ def check_notes(root):
     else:
         rows = table_rows(verify, "V")
         verdicts = [(r[0], r[6].upper() if len(r) > 6 else "") for r in rows]
+        decisions = decision_blocks(notes)
         passed = [v for v, d in verdicts if "PASS" in d]
-        failed = [v for v, d in verdicts if "FAIL" in d]
+        limited = [v for v, d in verdicts if accepted_limit(d, decisions)]
+        failed = [v for v, d in verdicts if "FAIL" in d and v not in limited]
+        bad_limit = [v for v, d in verdicts if "한계" in d and v not in limited]
         not_run = [v for v, d in verdicts if "NOT_RUN" in d or not d]
         detail = f"PASS {len(passed)}, FAIL {len(failed)} {failed if failed else ''}, NOT_RUN {len(not_run)} {not_run if not_run else ''}".strip()
+        if limited:
+            detail += f", 한계로 기록 {len(limited)} {limited} — 제출 문서에 적었는지 확인"
+        if bad_limit:
+            detail += f", 한계 근거 부족 {bad_limit} — `FAIL(한계 D-n)`의 D-n이 DECISIONS에 있고 결정자가 사용자이며 미확정이 아니어야 함"
         if not rows:
             add("FAIL", "검증", "V-n 행 0개 — 검증하지 않은 것은 통과가 아님")
         elif not passed or failed:
             add("FAIL", "검증", detail)
-        elif not_run:
+        elif not_run or limited:
             add("WARN", "검증", detail)
         else:
             add("PASS", "검증", f"PASS {len(passed)}")
